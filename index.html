@@ -105,7 +105,7 @@ function render(){
     (!q || [c.name,c.company,c.phone,c.city].some(v => (v||'').toLowerCase().includes(q.toLowerCase()))));
   const stat = (k,n,l,c) => `<button class="stat ${view===k?'on':''}" data-v="${k}"><b style="color:${c||'var(--fg)'}">${n}</b>${l}</button>`;
   app.innerHTML = `<div class="top"><div class="brand"><div class="logo">CT</div><h1>متابعة العملاء</h1></div>
-  <div class="acts"><button class="btn p" id="add">+ عميل</button><button class="btn" id="xl">تصدير Excel</button><button class="btn" id="out">خروج</button></div></div>
+  <div class="acts"><button class="btn p" id="add">+ عميل</button><button class="btn" id="im">استيراد</button><button class="btn" id="xl">تصدير Excel</button><input type="file" id="fi" class="hide" accept=".xlsx,.xls,.csv"><button class="btn" id="out">خروج</button></div></div>
   <div class="stats">${stat('all',customers.length,'كل العملاء')}${stat('due',customers.filter(due).length,'متابعات مستحقة','var(--c-neg)')}${stat('won',customers.filter(c=>c.status==='تم البيع').length,'تم البيع','var(--c-won)')}</div>
   <div class="tools"><input id="q" type="search" placeholder="ابحث بالاسم أو الشركة أو الهاتف" value="${esc(q)}"><select id="st"><option value="">كل الحالات</option>${allSt().map(s=>`<option ${s===st?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
   ${list.length ? list.map(c => `<div class="card c" style="--sc:${col(c.status)}"><div class="row"><div class="who"><div class="av">${esc([...(c.name||'?')][0])}</div><div><h2>${esc(c.name)}</h2><span class="muted">${esc([c.company,c.city].filter(Boolean).join(' - '))}</span></div></div>
@@ -114,12 +114,39 @@ function render(){
     <div class="acts">${c.phone?`<a class="btn s" href="tel:${esc(c.phone)}">اتصال</a><a class="btn s" target="_blank" rel="noopener" href="${wa(c.phone)}">واتساب</a>`:''}<button class="btn s p" data-id="${c.id}">فتح وتسجيل متابعة</button></div></div>`).join('')
     : '<div class="card empty">لا يوجد عملاء هنا.<br>اضغط "+ عميل" لإضافة أول عميل.</div>'}`;
   $('#add').onclick = () => openCustomer();
-  $('#xl').onclick = exportXlsx;
+  $('#xl').onclick = exportXlsx; $('#im').onclick = () => $('#fi').click(); $('#fi').onchange = importFile;
   $('#out').onclick = async () => { await sb.auth.signOut(); customers = []; loginView(); };
   $('#q').oninput = e => { q = e.target.value; render(); const i = $('#q'); i.focus(); i.setSelectionRange(q.length,q.length); };
   $('#st').onchange = e => { st = e.target.value; render(); };
   app.querySelectorAll('.stat').forEach(b => b.onclick = () => { view = b.dataset.v; render(); });
   app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => openCustomer(b.dataset.id));
+}
+
+async function importFile(e){
+  const f = e.target.files[0]; if(!f) return;
+  if(!window.XLSX) return alert('مكتبة Excel لم تتحمل. تأكد من الإنترنت.');
+  try{
+    const wb = XLSX.read(await f.arrayBuffer(), { type:'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'', raw:false });
+    const g = (r,k) => String(r[k] ?? '').trim();
+    const seen = new Set(customers.map(c => c.name + '|' + (c.city||'')));
+    const out = []; let skip = 0;
+    for(const r of rows){
+      const name = g(r,'الاسم'); if(!name) continue;
+      const city = g(r,'المدينة');
+      if(seen.has(name+'|'+city)){ skip++; continue; }
+      seen.add(name+'|'+city);
+      const d = g(r,'المتابعة القادمة');
+      out.push({ name, company:g(r,'الشركة')||null, city:city||null, phone:g(r,'الهاتف')||null, status:g(r,'الحالة')||'جديد',
+        next_follow_up:/^\d{4}-\d{2}-\d{2}$/.test(d)?d:null, notes:g(r,'ملاحظات')||null });
+    }
+    if(!out.length) return alert(skip ? 'كل العملاء موجودون بالفعل ('+skip+').' : 'لم أجد صفوفًا صالحة. تأكد من عناوين الأعمدة (الاسم، المدينة، الحالة...).');
+    if(!confirm('سيتم استيراد '+out.length+' عميل'+(skip?' (وتخطي '+skip+' مكرر)':'')+'. متابعة؟')) return;
+    const r = await sb.from('customers').insert(out);
+    if(r.error) return alert('تعذر الاستيراد: '+r.error.message);
+    alert('تم استيراد '+out.length+' عميل ✅'); loadAll();
+  }catch(err){ alert('تعذر قراءة الملف: '+err.message); }
+  finally{ e.target.value = ''; }
 }
 
 async function exportXlsx(){

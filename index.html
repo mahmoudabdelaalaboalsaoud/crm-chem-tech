@@ -2,14 +2,14 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#5E2B8A"><meta name="color-scheme" content="light dark">
 <title>متابعة العملاء</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <style>
 :root{--bg:#F4F2F8;--surface:#fff;--fg:#1E1A2B;--muted:#625B75;--line:#E1DCEB;--accent:#5E2B8A;--on:#fff;--soft:#ECE9F3;--bad:#9A2F1F;--bad-bg:#F9E0DA;--shadow:0 1px 3px #1e1a2b14;
---c-new:#5E2B8A;--c-int:#176E62;--c-quo:#946000;--c-neg:#B5541A;--c-won:#17653D;--c-lost:#9A2F1F;--c-x:#625B75;--font:'IBM Plex Sans Arabic',Tahoma,system-ui,sans-serif}
+--c-new:#5E2B8A;--c-lead:#2F5FA8;--c-int:#176E62;--c-quo:#946000;--c-neg:#B5541A;--c-won:#17653D;--c-lost:#9A2F1F;--c-x:#625B75;--font:'IBM Plex Sans Arabic',Tahoma,system-ui,sans-serif}
 @media(prefers-color-scheme:dark){:root{--bg:#14111C;--surface:#1D1928;--fg:#ECE8F5;--muted:#A79FBD;--line:#342E45;--accent:#B58BE0;--on:#1A0F26;--soft:#2A2438;--bad:#F3A294;--bad-bg:#40201B;--shadow:none;
---c-new:#B58BE0;--c-int:#5CC7B5;--c-quo:#E3B341;--c-neg:#F0A070;--c-won:#7FD8A4;--c-lost:#F3A294;--c-x:#A79FBD;color-scheme:dark}}
+--c-new:#B58BE0;--c-lead:#8DB4F0;--c-int:#5CC7B5;--c-quo:#E3B341;--c-neg:#F0A070;--c-won:#7FD8A4;--c-lost:#F3A294;--c-x:#A79FBD;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--font);padding:0 max(14px,env(safe-area-inset-right)) 48px max(14px,env(safe-area-inset-left))}
 #app{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
@@ -59,9 +59,9 @@ const SUPABASE_URL = 'https://ovhyefrscxqniaeeomiq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92aHllZnJzY3hxbmlhZWVvbWlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwOTc3MDEsImV4cCI6MjEwNjY3MzcwMX0.jx2en8f6TcbMQ_v7RvRdhvQ1jN-ePSi92VpK25dogOI';
 const COUNTRY_CODE = '20';
 // =====================
-const BASE_ST = ['جديد','مهتم','عرض سعر','تفاوض','تم البيع','خسارة'];
+const BASE_ST = ['عميل محتمل','جديد','مهتم','عرض سعر','تفاوض','تم البيع','خسارة'];
 const BASE_TY = ['مكالمة','زيارة','واتساب','إيميل'];
-const SC = {'جديد':'new','مهتم':'int','عرض سعر':'quo','تفاوض':'neg','تم البيع':'won','خسارة':'lost'};
+const SC = {'عميل محتمل':'lead','جديد':'new','مهتم':'int','عرض سعر':'quo','تفاوض':'neg','تم البيع':'won','خسارة':'lost'};
 const col = s => `var(--c-${SC[s]||'x'})`;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $ = s => document.querySelector(s), app = $('#app'), dlg = $('#dlg');
@@ -70,7 +70,10 @@ const today = () => new Date().toLocaleDateString('en-CA');
 let customers = [], view = 'all', q = '', st = '';
 const allSt = () => [...new Set([...BASE_ST, ...customers.map(c => c.status).filter(Boolean)])];
 const mapUrl = c => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.name,c.company,c.city].filter(Boolean).join(' '));
-const wa = p => { let d = String(p||'').replace(/\D/g,''); if(d.startsWith('0')) d = COUNTRY_CODE + d.slice(1); return 'https://wa.me/' + d; };
+const wa = p => { let d = String(p||'').replace(/\D/g,''); if(d.startsWith('00')) d = d.slice(2); else if(d.startsWith('0')) d = COUNTRY_CODE + d.slice(1); return 'https://wa.me/' + d; };
+const unit = k => k===1?'يوم':k===2?'يومين':k<=10?k+' أيام':k+' يومًا';
+const rel = d => { const n = Math.round((new Date(d+'T00:00') - new Date(today()+'T00:00'))/864e5); return n===0?'اليوم':n===1?'غدًا':n>1?'بعد '+unit(n):'متأخرة '+unit(-n); };
+const ERR = m => ({'Invalid login credentials':'الإيميل أو كلمة المرور غير صحيحة','Email not confirmed':'الإيميل لم يتم تأكيده بعد','Failed to fetch':'تعذر الاتصال. تأكد من الإنترنت'}[m] || m);
 const selNew = (name, list, val, what) => `<select name="${name}" data-new>${list.map(s => `<option ${s===val?'selected':''}>${esc(s)}</option>`).join('')}<option value="__new">＋ إضافة ${what} جديدة…</option></select><input name="${name}_new" class="hide" placeholder="اكتب ${what} الجديدة" maxlength="40">`;
 const pick = (v, k) => { if(v[k]==='__new') v[k] = (v[k+'_new']||'').trim() || null; delete v[k+'_new']; };
 
@@ -89,10 +92,11 @@ function loginView(msg=''){
   <div id="msg">${esc(msg)}</div><div class="acts"><button class="btn p">دخول</button></div></form>`;
   $('#lf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
     const { error } = await sb.auth.signInWithPassword({ email:f.get('email'), password:f.get('pw') });
-    error ? loginView(error.message) : loadAll(); };
+    error ? loginView(ERR(error.message)) : loadAll(); };
 }
 
 async function loadAll(){
+  if(!customers.length) app.innerHTML = '<div class="empty">جاري التحميل…</div>';
   const { data, error } = await sb.from('customers').select('*').order('next_follow_up',{ascending:true,nullsFirst:false});
   if(error){ app.innerHTML = `<div class="card">تعذر تحميل البيانات: ${esc(error.message)}</div>`; return; }
   customers = data; render();
@@ -111,7 +115,7 @@ function render(){
   <div class="tools"><input id="q" type="search" placeholder="ابحث بالاسم أو الشركة أو الهاتف" value="${esc(q)}"><select id="st"><option value="">كل الحالات</option>${allSt().map(s=>`<option ${s===st?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
   ${list.length ? list.map(c => `<div class="card c" style="--sc:${col(c.status)}"><div class="row"><div class="who"><div class="av">${esc([...(c.name||'?')][0])}</div><div><h2>${esc(c.name)}</h2><span class="muted">${esc([c.company,c.city].filter(Boolean).join(' - '))}</span></div></div>
     <span class="pill st">${esc(c.status)}</span></div>
-    <div class="row"><span class="muted" dir="ltr">${esc(c.phone)}</span>${c.next_follow_up?`<span class="pill ${late(c)?'late':''}">متابعة: ${c.next_follow_up}${late(c)?' (متأخرة)':''}</span>`:''}</div>
+    <div class="row"><span class="muted" dir="ltr">${esc(c.phone)}</span>${c.next_follow_up?`<span class="pill ${late(c)?'late':''}" title="${c.next_follow_up}">متابعة: ${rel(c.next_follow_up)}</span>`:''}</div>
     <div class="acts">${c.phone?`<a class="btn s" href="tel:${esc(c.phone)}">اتصال</a><a class="btn s" target="_blank" rel="noopener" href="${wa(c.phone)}">واتساب</a>`:''}<a class="btn s" target="_blank" rel="noopener" href="${mapUrl(c)}">📍 الخريطة</a><button class="btn s p" data-id="${c.id}">فتح وتسجيل متابعة</button></div></div>`).join('')
     : '<div class="card empty">لا يوجد عملاء هنا.<br>اضغط "+ عميل" لإضافة أول عميل.</div>'}`;
   $('#add').onclick = () => openCustomer();
@@ -178,23 +182,26 @@ async function openCustomer(id){
   <div class="acts"><button class="btn p">حفظ</button><button class="btn" type="button" id="cl">إغلاق</button>${id?'<button class="btn s" type="button" id="del" style="margin-inline-start:auto;color:var(--bad)">حذف العميل</button>':''}</div></form>
   ${id?`<hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><form id="lg"><h2>تسجيل متابعة</h2>
   <div class="g2"><label>النوع${selNew('type', types, types[0], 'نوع')}</label><label>المتابعة القادمة<input name="next" type="date"></label></div>
+  <label>الحالة بعد المتابعة${selNew('lstatus', allSt(), c.status||'جديد', 'حالة')}</label>
   <label>ماذا حدث؟<textarea name="note" rows="2" required></textarea></label><button class="btn p">إضافة للسجل</button></form>
   <div>${logs.map(l=>`<div class="log"><b>${esc(l.type)}</b> <span class="muted">${new Date(l.created_at).toLocaleDateString('ar-EG')}</span><div>${esc(l.note)}</div></div>`).join('')||'<p class="muted">لا يوجد سجل متابعات بعد.</p>'}</div>`:''}`;
   dlg.showModal();
   $('#cl').onclick = () => dlg.close();
-  $('#cf').onsubmit = async e => { e.preventDefault();
+  $('#cf').onsubmit = async e => { e.preventDefault(); const btn = e.submitter; btn.disabled = true;
     const v = Object.fromEntries(new FormData(e.target)); pick(v,'status'); v.status = v.status || 'جديد'; v.next_follow_up = v.next_follow_up || null;
     const r = id ? await sb.from('customers').update(v).eq('id',id) : await sb.from('customers').insert(v);
-    if(r.error) return alert('تعذر الحفظ: '+r.error.message); dlg.close(); loadAll(); };
+    if(r.error){ btn.disabled = false; return alert('تعذر الحفظ: '+r.error.message); } dlg.close(); loadAll(); };
   if(id){
     $('#del').onclick = async () => { if(!confirm('حذف العميل وكل سجله نهائياً؟')) return; await sb.from('customers').delete().eq('id',id); dlg.close(); loadAll(); };
-    $('#lg').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); pick(f,'type');
+    $('#lg').onsubmit = async e => { e.preventDefault(); const btn = e.submitter; btn.disabled = true; const f = Object.fromEntries(new FormData(e.target)); pick(f,'type'); pick(f,'lstatus');
       const r = await sb.from('interactions').insert({ customer_id:id, type:f.type || 'مكالمة', note:f.note });
-      if(r.error) return alert('تعذر الحفظ: '+r.error.message);
-      if(f.next) await sb.from('customers').update({ next_follow_up:f.next }).eq('id',id);
+      if(r.error){ btn.disabled = false; return alert('تعذر الحفظ: '+r.error.message); }
+      const upd = {}; if(f.next) upd.next_follow_up = f.next; if(f.lstatus && f.lstatus !== c.status) upd.status = f.lstatus;
+      if(Object.keys(upd).length) await sb.from('customers').update(upd).eq('id',id);
       dlg.close(); await loadAll(); openCustomer(id); };
   }
 }
+sb.auth.onAuthStateChange(ev => { if(ev === 'SIGNED_OUT') loginView(); });
 boot();
 </script>
 </body>
